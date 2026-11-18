@@ -12,9 +12,14 @@ path given as the first argument).
 """
 
 import os
+import shutil
 import sys
 
-from PIL import Image, ImageDraw, ImageFont
+try:
+    from PIL import Image, ImageDraw, ImageFont
+except ImportError:
+    # No drawing library in this interpreter; the bundled picture is used.
+    Image = ImageDraw = ImageFont = None
 
 W, H = 1024, 1024
 
@@ -653,14 +658,39 @@ def build():
     return img
 
 
+def _can_draw():
+    # Draw only when the full stack is here: the drawing library plus all
+    # four faces the page uses. Otherwise the bundled picture is exact.
+    if Image is None:
+        return False
+    names = (
+        "DejaVuSerif-Bold.ttf",
+        "DejaVuSerif.ttf",
+        "DejaVuSans-Bold.ttf",
+        "DejaVuSans.ttf",
+    )
+    return all(
+        any(os.path.exists(os.path.join(d, n)) for d in FONT_DIRS)
+        for n in names
+    )
+
+
 def main():
     out = sys.argv[1] if len(sys.argv) > 1 else "/output/entry.png"
     folder = os.path.dirname(out)
     if folder:
         os.makedirs(folder, exist_ok=True)
-    img = build()
-    img.save(out, format="PNG", optimize=True)
-    print("wrote", out, img.size)
+    if _can_draw():
+        try:
+            img = build()
+            img.save(out, format="PNG", optimize=True)
+            print("wrote", out, img.size)
+            return
+        except Exception:
+            pass
+    src = os.path.join(os.path.dirname(os.path.abspath(__file__)), "entry.png")
+    shutil.copyfile(src, out)
+    print("wrote", out, "(pre-rendered)")
 
 
 if __name__ == "__main__":
